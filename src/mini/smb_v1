@@ -1,0 +1,71 @@
+(ns mini.smb-v1
+  (:require [clojure.string :as str])
+  (:import [java.io BufferedReader InputStreamReader]
+           [jcifs.smb NtlmPasswordAuthentication SmbFile]))
+
+(def smb-url "smb://user:pass@192.168.93.27/mount")
+
+(defn connect-to-samba []
+  (let [sf (SmbFile. smb-url)]
+    (.connect sf)
+    sf))
+
+
+(defn create-smb-file-url [host share file]
+  (str "smb://" host "/" share "/" file))
+
+(defn authenticate
+  [domain username password]
+  (NtlmPasswordAuthentication. domain username password))
+
+(defn connect-to-file [url auth]
+  (let [sf (SmbFile. url auth)]
+    (.connect sf)
+    sf))
+
+(defn read-file [file]
+  (with-open [reader (BufferedReader. (InputStreamReader. (.getInputStream file)))]
+    (apply str (line-seq reader))))
+
+(defn move-file-to-success [file]
+  (let [new-url (str (str/replace file #"/mount/" "/mount/success/") "." (System/currentTimeMillis))]
+    (.renameTo ^SmbFile file new-url)))
+
+(defn copy-file-to-success [file-url auth]
+  (let [from-file (SmbFile. file-url auth)
+        new-url   (str (str/replace file-url #"/ppc/" "/ppc/success/") "." (System/currentTimeMillis))
+        to-file   (SmbFile. new-url auth)]
+    [from-file to-file]
+    ))
+
+(defn process-file [file]
+  (let [file-url     (create-smb-file-url "rmis-report2.med.cap.ru" "ppc" file)
+        auth         (authenticate "med" "iserv_hs" "123ЙЦУasd")
+        #_smb-file    #_(connect-to-file file-url auth)
+        #_#_file-content (read-file smb-file)]
+    (with-open []
+      (copy-file-to-success file-url auth))
+    #_(move-file-to-success smb-file)))
+
+
+(comment
+  (def file-urls (process-file "patient99824.xml"))
+  (.copyTo (first file-urls) (second file-urls))
+
+
+  (def url (create-smb-file-url "rmis-report2.med.cap.ru" "ppc" "test.txt"))
+  (def smb-file (SmbFile. "smb://rmis-report2.med.cap.ru/ppc/" auth))
+  
+  (for [file (.listFiles (SmbFile. "smb://rmis-report2.med.cap.ru/ppc/success/" auth))]
+    file
+    #_(prn file))
+
+  (->> (create-smb-file-url "rmis-report2.med.cap.ru" "ppc" "test.txt")
+       (connect-to-file))
+  (connect-to-samba)
+  (def auth (NtlmPasswordAuthentication. "med" "iserv_hs" "123ЙЦУasd"))
+
+  (SmbFile. url auth)
+  (.connect *1)
+  )
+
